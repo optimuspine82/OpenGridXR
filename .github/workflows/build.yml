@@ -1,9 +1,10 @@
 name: Build and test
-# Fork: builds also run for rig-* branches (see the push branches below).
+# Fork: builds also run for rig-* branches and on demand, and keep the installer as a download.
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, 'rig-*']
   pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -35,8 +36,15 @@ jobs:
       - name: Run portable native checks
         shell: pwsh
         run: ctest --test-dir native/build -C Release --output-on-failure -R "^native-(wheel-projection|core|telemetry|control|edit-input|input|helmet-math|stream-helmet|inactive-paths|swapchain-wait|output-framing|lmu|layer-registry|color-control|color-cli|desktop-interaction|overlay-protocol|internal-ui)"
-      - name: Package unsigned application
-        run: npm run package
+      - name: Package unsigned application and installer
+        run: npm run package:installer
+      - name: Keep the installer as a download
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenGridXR-installer
+          path: release/*/*.exe
+          if-no-files-found: error
+          retention-days: 30
       - name: Check packaged module settings and lazy pages
         shell: pwsh
         run: |
