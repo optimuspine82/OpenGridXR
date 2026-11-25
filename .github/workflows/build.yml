@@ -1,4 +1,5 @@
 name: Build and test
+# Fork: builds also run for rig-* branches (see the push branches below).
 on:
   push:
     branches: [main, develop]
