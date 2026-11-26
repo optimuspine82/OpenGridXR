@@ -11,7 +11,7 @@ const { spawn: defaultSpawn } = require("node:child_process");
 const KEYS = ["x", "y", "z", "yaw", "pitch", "roll", "widthMeters"];
 const DEFAULT_RANGES = { x: [-5, 5], y: [-5, 5], z: [-10, -0.1], yaw: [-180, 180], pitch: [-180, 180], roll: [-180, 180], widthMeters: [0.1, 3] };
 // Sensitivity per mouse count / wheel notch; Shift divides by FINE.
-const STEP = { move: 0.0005, depth: 0.001, notch: 0.02, turn: 0.1, scale: 1.03 };
+const STEP = { move: 0.00025, depth: 0.0005, notch: 0.02, turn: 0.05, scale: 1.03 };
 const FINE = 5;
 
 const clamp = (v, [lo, hi]) => Math.max(lo, Math.min(hi, v));
@@ -19,6 +19,8 @@ const round = (key, v) => Number(v.toFixed(["yaw", "pitch", "roll"].includes(key
 
 // Pure: one mouse report applied to a pose. mode "move" | "rotate".
 function applyMouse(pose, mode, { dx = 0, dy = 0, wheel = 0, right = false, shift = false }, ranges = DEFAULT_RANGES) {
+  const cap = (v) => Math.max(-400, Math.min(400, Number(v) || 0));   // ignore runaway reports
+  dx = cap(dx); dy = cap(dy); wheel = Math.max(-10, Math.min(10, Number(wheel) || 0));
   const f = shift ? 1 / FINE : 1, next = { ...pose };
   const add = (key, delta) => { next[key] = round(key, clamp(next[key] + delta, ranges[key])); };
   if (mode === "move") {

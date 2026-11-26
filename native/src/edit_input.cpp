@@ -76,11 +76,19 @@ LRESULT CALLBACK mouseProc(int code, WPARAM wParam, LPARAM lParam) {
         auto *m = reinterpret_cast<MSLLHOOKSTRUCT *>(lParam);
         if (m->flags & LLMHF_INJECTED) return CallNextHookEx(nullptr, code, wParam, lParam);
         switch (wParam) {
-        case WM_MOUSEMOVE:
-            // The cursor is held at the anchor, so movement never runs out at a screen edge.
-            accX += m->pt.x - anchor.x;
-            accY += m->pt.y - anchor.y;
+        case WM_MOUSEMOVE: {
+            // The move is swallowed, so the cursor stays put and movement never runs out at a screen edge.
+            // Measure from where the cursor really is now: games (iRacing) re-centre or clip the cursor
+            // themselves, and measuring from where editing started then adds a drift to every move.
+            POINT now{};
+            if (!GetCursorPos(&now)) now = anchor;
+            long dx = m->pt.x - now.x, dy = m->pt.y - now.y;
+            dx = dx > 200 ? 200 : dx < -200 ? -200 : dx;   // one event never jumps far
+            dy = dy > 200 ? 200 : dy < -200 ? -200 : dy;
+            accX += dx;
+            accY += dy;
             return 1;
+        }
         case WM_MOUSEWHEEL:
             accWheel += GET_WHEEL_DELTA_WPARAM(m->mouseData);
             return 1;

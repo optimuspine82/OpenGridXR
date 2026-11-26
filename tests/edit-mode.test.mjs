@@ -47,7 +47,7 @@ test("Tab, mouse, Space, M, then Esc and Enter save only what moved", async () =
   assert.equal(h.previews.at(-1).selected, "a"); assert.equal(h.previews.at(-1).phase, "edit");
   p.record({ op: "mouse", dx: 200, dy: -100, wheel: 0, right: false, shift: false });
   let a = h.previews.at(-1).poses.get("a");
-  assert.equal(a.x, 0.1); assert.equal(a.y, -0.3);                  // right and up
+  assert.equal(a.x, 0.05); assert.equal(a.y, -0.325);                  // right and up
   p.record({ op: "mouse", dx: 0, dy: 0, wheel: 2, right: false, shift: false });
   assert.equal(h.previews.at(-1).poses.get("a").z, -1.04);          // wheel up: farther
   p.record({ op: "key", key: "space" });
@@ -59,16 +59,16 @@ test("Tab, mouse, Space, M, then Esc and Enter save only what moved", async () =
   assert.equal(h.previews.at(-1).mode, "rotate");
   p.record({ op: "mouse", dx: 100, dy: -50, wheel: 0, right: false, shift: false });
   a = h.previews.at(-1).poses.get("a");
-  assert.equal(a.yaw, 10); assert.equal(a.pitch, 5);
+  assert.equal(a.yaw, 5); assert.equal(a.pitch, 2.5);
   p.record({ op: "key", key: "escape" });
   assert.equal(h.previews.at(-1).phase, "confirm");
   p.record({ op: "mouse", dx: 500, dy: 0, wheel: 0, right: false, shift: false });   // ignored while asking
-  assert.equal(h.previews.at(-1).poses.get("a").x, 0.1);
+  assert.equal(h.previews.at(-1).poses.get("a").x, 0.05);
   p.record({ op: "key", key: "enter" });
   await new Promise((r) => setImmediate(r));
   assert.equal(h.saves.length, 1);
   assert.deepEqual(h.saves[0].edits.map((e) => e.id), ["a"]);
-  assert.equal(h.saves[0].edits[0].pose.yaw, 10);
+  assert.equal(h.saves[0].edits[0].pose.yaw, 5);
   assert.deepEqual(p.stdin.lines.at(-1), { op: "edit", on: false });
   assert.equal(h.previews.at(-1).phase, null);
   assert.ok(h.beeps.includes("saved"));
@@ -105,10 +105,11 @@ test("overlays disappearing ends the edit without saving", () => {
 
 test("mouse steps: shift is fine, right-drag moves in depth and leans, wheel resizes when rotating, limits hold", () => {
   const base = pose(0);
-  assert.equal(applyMouse(base, "move", { dx: 100, shift: true }).x, 0.01);
-  assert.equal(applyMouse(base, "move", { dy: -100, right: true }).z, -1.1);           // push the mouse away: farther
-  assert.equal(applyMouse(base, "rotate", { dx: 50, right: true }).roll, 5);
+  assert.equal(applyMouse(base, "move", { dx: 100, shift: true }).x, 0.005);
+  assert.equal(applyMouse(base, "move", { dy: -100, right: true }).z, -1.05);           // push the mouse away: farther
+  assert.equal(applyMouse(base, "rotate", { dx: 50, right: true }).roll, 2.5);
   assert.equal(applyMouse(base, "rotate", { wheel: 1 }).widthMeters, 0.618);
-  assert.equal(applyMouse(base, "move", { dx: 1e6 }).x, 5);
+  assert.equal(applyMouse(base, "move", { dx: 1e6 }).x, 0.1);             // a runaway report is capped
+  assert.equal(applyMouse({ ...base, x: 4.99 }, "move", { dx: 400 }).x, 5);
   assert.equal(applyMouse({ ...base, z: -0.12 }, "move", { wheel: -5 }).z, -0.1);
 });
