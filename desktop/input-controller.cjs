@@ -13,6 +13,11 @@ function createInputController({createHost,listActions,applyAction,applyHoldActi
   let document, closed=false, applying=false, applyingClick=null, error="", timer=null;
   let editor={dirty:true,busy:true,profileId:""};
   let capture={state:"idle"};
+  // While learning a button, ignore controls that are already held when learning starts (for example a
+  // multi-position rotary that keeps one button down in every position): held reports in the first moments
+  // after learning starts mark them.
+  let captureHeld=new Set(),captureStartedAt=0;
+  const CAPTURE_SETTLE_MS=400;
   const holds=new Map(), blocked=new Set();
   const key=input=>`${input.deviceId}:${input.kind}:${input.index}:${input.direction??''}`;
   const host=createHost({onPress:press,onRelease:release,onHeld:held,onStatus:status=>{
@@ -72,6 +77,7 @@ function createInputController({createHost,listActions,applyAction,applyHoldActi
   function held(report) {
     if(closed || !report || !Array.isArray(report.inputs)) return;
     const inputs=report.inputs.map(input=>({...input,deviceId:report.deviceId}));
+    if(capture.state==="listening" && Date.now()-captureStartedAt<CAPTURE_SETTLE_MS) for(const input of inputs) captureHeld.add(key(input));
     for(const entry of holds.values()) if(entry.input.deviceId===report.deviceId) {
       if(!inputs.some(input=>matches(entry.input,input))) release(entry.input);
       else if(paused(entry) || bindings()?.enabled===false || selected()?.id!==entry.profileId || !listActions(selected()).some(action=>action.id===entry.actionId && allowedAction(action))) cancel(entry);
@@ -87,6 +93,7 @@ function createInputController({createHost,listActions,applyAction,applyHoldActi
     const physical=key(input),wasBlocked=blocked.has(physical);
     if(action?.hold) blocked.add(physical);
     if (capture.state === "listening") {
+      if(captureHeld.has(physical)) return;   // held when learning started (a rotary position), not a new press
       clearTimeout(timer); timer=null;
       const deviceName=(host.state().devices.find(d=>d.id===input.deviceId)?.name || "Joystick").slice(0,160);
       capture={...capture,state:"captured",input:{deviceId:input.deviceId,deviceName,kind:input.kind,index:input.index,...(input.kind==="pov"?{direction:input.direction}:{})}};
@@ -128,6 +135,7 @@ function createInputController({createHost,listActions,applyAction,applyHoldActi
       clearTimeout(timer);
       cancelAll();
       capture={state:"listening",actionId,profileId};
+      captureHeld=new Set(); captureStartedAt=Date.now();
       timer=setTimeout(()=>{capture={...capture,state:"error",error:"No button received. Check the device and try again."};timer=null;synchronize();},15000);
       timer.unref?.(); synchronize(); return this.captureStatus();
     },

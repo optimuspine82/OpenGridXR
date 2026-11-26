@@ -169,3 +169,16 @@ test('overlay recenter captures button and POV inputs without dispatch, then run
     f.controller.close();
   }
 });
+
+test('learning skips a control that is held when it starts (a multi-position rotary) and takes the next real press',()=>{
+  const f=setup();f.controller.editorState({dirty:false,busy:false,profileId:'profile'});
+  const rotary={deviceId:input.deviceId,kind:'button',index:103},paddle={deviceId:input.deviceId,kind:'button',index:7};
+  f.controller.captureStart('overlay.enabled','profile');
+  f.held([rotary]);                       // the rotary keeps button 104 down
+  f.press(rotary);                        // it flickers or is re-reported: not a new press
+  assert.equal(f.controller.captureStatus().state,'listening');
+  f.press(paddle);
+  const captured=f.controller.captureStatus();
+  assert.equal(captured.state,'captured');assert.equal(captured.input.index,7);
+  f.controller.close();
+});
