@@ -113,6 +113,14 @@ int selfTest() {
 
 int main(int argc, char **argv) {
     if (argc > 1 && std::string(argv[1]) == "--self-test") return selfTest();
+    // Mouse hook positions are physical pixels, but GetCursorPos in a DPI-unaware program returns scaled
+    // ones; at 125%/150% display scaling the difference looked like constant mouse movement (overlays slid
+    // off to one side). Be per-monitor DPI aware so both use the same pixels.
+    using SetContextFn = BOOL(WINAPI *)(HANDLE);
+    if (auto setContext = reinterpret_cast<SetContextFn>(GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetProcessDpiAwarenessContext")))
+        setContext(reinterpret_cast<HANDLE>(-4));   // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
+    else
+        SetProcessDPIAware();
     hookThread = GetCurrentThreadId();
     MSG msg;
     PeekMessageW(&msg, nullptr, WM_USER, WM_USER, PM_NOREMOVE);   // give this thread a message queue
