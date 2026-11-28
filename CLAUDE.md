@@ -10,7 +10,7 @@ This is **optimuspine82/OpenGridXR**, a fork of DSuzuki35/OpenGridXR (upstream a
 ## Branches
 - `main`: upstream 1.2.0 (0bf9b36) + Jason's changes: the RaceLab-style edit mode, the button-learning fix and the installer build. This is what he installs.
 - `rig-edit-mode`: the edit mode commits, kept fast-forwarded to `main`.
-- `rig-integration` (old, local only): wheel-LED work that was dropped.
+- The earlier wheel-LED work (`rig-integration`) was dropped and is not in this repo.
 
 ## Building the installer (GitHub Actions)
 - Workflow **Build and test** (`.github/workflows/build.yml`) runs on pushes to `main`, `develop` and `rig-*`, and on demand. On this fork it makes the NSIS installer and uploads it as the **OpenGridXR-installer** artifact (30 days). Upstream's build doesn't do that; keep the fork's version.
