@@ -13,6 +13,7 @@ const DEFAULT_RANGES = { x: [-5, 5], y: [-5, 5], z: [-10, -0.1], yaw: [-180, 180
 // Sensitivity per mouse count / wheel notch; Shift divides by FINE.
 const STEP = { move: 0.00025, depth: 0.0005, notch: 0.02, turn: 0.05, scale: 1.03 };
 const FINE = 5;
+const SAVE_TIMEOUT_MS = 10000;   // give the keys back and report an error if saving hangs
 
 const clamp = (v, [lo, hi]) => Math.max(lo, Math.min(hi, v));
 const round = (key, v) => Number(v.toFixed(["yaw", "pitch", "roll"].includes(key) ? 2 : 4));
@@ -40,7 +41,7 @@ function applyMouse(pose, mode, { dx = 0, dy = 0, wheel = 0, right = false, shif
 // mode "move" (blue frame) | "rotate" (orange frame).
 // save(game, carId, edits /* [{ id, pose }] */): store the poses in the profile.
 function createEditMode({ executable, targets, preview, save, beep = () => {}, onStatus = () => {}, spawn = defaultSpawn,
-  ranges = DEFAULT_RANGES, setInterval: every = setInterval, clearInterval: stopEvery = clearInterval, setTimeout: later = setTimeout } = {}) {
+  ranges = DEFAULT_RANGES, setInterval: every = setInterval, clearInterval: stopEvery = clearInterval, setTimeout: later = setTimeout, clearTimeout: cancel = clearTimeout } = {}) {
   let child = null, buffer = "", closed = false, armed = false, retry = null, attempt = 0, ready = false, error = "";
   let session = null;   // { game, carId, order: [ids], names, original: Map, poses: Map, index, mode, phase, saving }
   const send = (o) => { try { child?.stdin?.write(JSON.stringify(o) + "\n"); } catch { } };
@@ -50,7 +51,7 @@ function createEditMode({ executable, targets, preview, save, beep = () => {}, o
   function start() {
     if (closed || child) return;
     let spawned;
-    try { spawned = spawn(executable, [], { windowsHide: true, stdio: ["pipe", "pipe", "pipe"] }); }
+    try { spawned = spawn(executable, [], { windowsHide: true, stdio: ["pipe", "pipe", "ignore"] }); }
     catch (e) { error = e.message; schedule(); report(); return; }
     child = spawned; buffer = ""; ready = false;
     spawned.stdout?.setEncoding?.("utf8");
@@ -112,8 +113,18 @@ function createEditMode({ executable, targets, preview, save, beep = () => {}, o
     const edits = s.order.filter(id => KEYS.some(k => s.poses.get(id)[k] !== s.original.get(id)[k])).map(id => ({ id, pose: s.poses.get(id) }));
     if (!edits.length) { beep("saved"); end(false); return; }
     s.saving = true;
-    try { await save(s.game, s.carId, edits); beep("saved"); end(true); }
-    catch (e) { error = String(e?.message || e).slice(0, 200); beep("error"); s.saving = false; s.phase = "edit"; show(); report(); }
+    send({ op: "edit", on: false });   // hand keys and mouse back to the game at once, even if saving stalls
+    let timeout, timedOut = false;
+    try {
+      await Promise.race([save(s.game, s.carId, edits),
+        new Promise((_, reject) => { timeout = later(() => { timedOut = true; reject(new Error("Saving took too long")); }, SAVE_TIMEOUT_MS); })]);
+      beep("saved"); end(true);
+    } catch (e) {
+      error = String(e?.message || e).slice(0, 200); beep("error");
+      if (session !== s) return;
+      if (timedOut) { end(false); return; }   // don't grab the keys again 10 s later: he may be driving
+      s.saving = false; s.phase = "edit"; send({ op: "edit", on: true }); show(); report();   // refused at once: keep the placement, keep editing
+    } finally { cancel(timeout); }
   }
   function key(name) {
     if (!session) { if (name === "tab" && armed) begin(); return; }
@@ -141,7 +152,7 @@ function createEditMode({ executable, targets, preview, save, beep = () => {}, o
     close() {
       if (closed) return; closed = true;
       if (session) end(false);
-      stopEvery(timer); if (retry) clearTimeout(retry);
+      stopEvery(timer); if (retry) cancel(retry);
       if (child) { send({ op: "quit" }); try { child.stdin?.end?.(); } catch { } const c = child; later(() => { try { c.kill(); } catch { } }, 250); child = null; }
     },
   };

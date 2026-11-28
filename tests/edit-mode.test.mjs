@@ -7,7 +7,7 @@ const { createEditMode, applyMouse } = createRequire(import.meta.url)("../deskto
 const pose = (x = 0) => ({ x, y: -0.35, z: -1, yaw: 0, pitch: 0, roll: 0, widthMeters: 0.6 });
 
 function harness({ items = [{ id: "a", name: "Dash", pose: pose(0) }, { id: "b", name: "Relative", pose: pose(0.5) }], save } = {}) {
-  const processes = [], previews = [], beeps = [], saves = [];
+  const processes = [], previews = [], beeps = [], saves = [], timers = [];
   let tick = null, showing = items;
   const spawn = (exe, args, opts) => {
     const child = new EventEmitter();
@@ -23,9 +23,9 @@ function harness({ items = [{ id: "a", name: "Dash", pose: pose(0) }, { id: "b",
     preview: (game, poses, selected, phase, mode) => previews.push({ game, poses: new Map(poses), selected, phase, mode }),
     save: save || (async (game, carId, edits) => { saves.push({ game, carId, edits }); }),
     beep: (k) => beeps.push(k),
-    setInterval: (fn) => { tick = fn; return { unref() {} }; }, clearInterval: () => {}, setTimeout: (fn) => ({ unref() {} }),
+    setInterval: (fn) => { tick = fn; return { unref() {} }; }, clearInterval: () => {}, setTimeout: (fn, ms) => { timers.push({ fn, ms }); return { unref() {} }; }, clearTimeout: () => {},
   });
-  return { mode, processes, previews, beeps, saves, tick: () => tick(), hide: () => { showing = []; } };
+  return { mode, processes, previews, beeps, saves, timers, tick: () => tick(), hide: () => { showing = []; } };
 }
 
 test("the helper starts and Tab is armed only while overlays are showing", () => {
@@ -112,4 +112,28 @@ test("mouse steps: shift is fine, right-drag moves in depth and leans, wheel res
   assert.equal(applyMouse(base, "move", { dx: 1e6 }).x, 0.1);             // a runaway report is capped
   assert.equal(applyMouse({ ...base, x: 4.99 }, "move", { dx: 400 }).x, 5);
   assert.equal(applyMouse({ ...base, z: -0.12 }, "move", { wheel: -5 }).z, -0.1);
+});
+
+test("Enter hands keys back at once; a refused save resumes editing, a hung one ends it", async () => {
+  let fail, fire;
+  const h = harness({ save: () => new Promise((_, reject) => { fail = reject; }) });
+  h.tick(); const p = h.processes[0]; p.record({ op: "ready" });
+  p.record({ op: "key", key: "tab" });
+  p.record({ op: "mouse", dx: 200, dy: 0, wheel: 0, right: false, shift: false });
+  p.record({ op: "key", key: "escape" }); p.record({ op: "key", key: "enter" });
+  assert.deepEqual(p.stdin.lines.at(-1), { op: "edit", on: false });   // before the save finishes
+  fail(new Error("disk full"));
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(p.stdin.lines.at(-1), { op: "edit", on: true });    // refused straight away: keep editing
+  assert.equal(h.mode.status().editing.phase, "edit");
+
+  const h2 = harness({ save: () => new Promise(() => {}) });   // never finishes
+  h2.tick(); const q = h2.processes[0]; q.record({ op: "ready" });
+  q.record({ op: "key", key: "tab" }); q.record({ op: "mouse", dx: 200, dy: 0 });
+  q.record({ op: "key", key: "escape" }); q.record({ op: "key", key: "enter" });
+  h2.timers.find((t) => t.ms === 10000).fn();
+  await new Promise((r) => setImmediate(r));
+  assert.equal(h2.mode.status().editing, null);                         // ended, keys stay with the game
+  assert.deepEqual(q.stdin.lines.at(-1), { op: "edit", on: false });
+  assert.match(h2.mode.status().error, /too long/);
 });

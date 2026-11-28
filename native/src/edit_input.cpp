@@ -61,12 +61,16 @@ LRESULT CALLBACK keyboardProc(int code, WPARAM wParam, LPARAM lParam) {
         bool up = (k->flags & LLKHF_UP) != 0;
         bool injected = (k->flags & LLKHF_INJECTED) != 0;
         bool modifier = held(VK_MENU) || held(VK_CONTROL) || held(VK_LWIN) || held(VK_RWIN);
-        if (!injected && takes(vk, armed, editing, modifier)) {
-            if (!up && !keyDown[vk]) emit(std::string("{\"op\":\"key\",\"key\":\"") + keyName(vk) + "\"}");   // first press only, no auto-repeat
-            keyDown[vk] = !up;
+        if (up) {
+            // Swallow a release only if we swallowed its press; otherwise the game would see the key stuck down.
+            bool ours = keyDown[vk];
+            keyDown[vk] = false;
+            if (ours) return 1;
+        } else if (!injected && takes(vk, armed, editing, modifier)) {
+            if (!keyDown[vk]) emit(std::string("{\"op\":\"key\",\"key\":\"") + keyName(vk) + "\"}");   // first press only, no auto-repeat
+            keyDown[vk] = true;
             return 1;   // the game never sees it
         }
-        if (up) keyDown[vk] = false;
     }
     return CallNextHookEx(nullptr, code, wParam, lParam);
 }
@@ -81,7 +85,7 @@ LRESULT CALLBACK mouseProc(int code, WPARAM wParam, LPARAM lParam) {
             // Measure from where the cursor really is now: games (iRacing) re-centre or clip the cursor
             // themselves, and measuring from where editing started then adds a drift to every move.
             POINT now{};
-            if (!GetCursorPos(&now)) now = anchor;
+            if (!GetCursorPos(&now)) return 1;   // never measure from a stale point
             long dx = m->pt.x - now.x, dy = m->pt.y - now.y;
             dx = dx > 200 ? 200 : dx < -200 ? -200 : dx;   // one event never jumps far
             dy = dy > 200 ? 200 : dy < -200 ? -200 : dy;

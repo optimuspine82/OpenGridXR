@@ -2,6 +2,7 @@
 
 ## Unreleased (rig-edit-mode)
 
+- Edit mode safety fixes: Enter hands the keys and mouse back to the game straight away; a save that hangs for 10 s ends editing; a key already held when editing starts is no longer left stuck down in the game; a failed cursor read can no longer cause drift.
 - Added a RaceLab-style edit mode for spatial overlays, used from the headset. With overlays showing in the game:
   **Tab** starts editing (the selected overlay gets a blue frame and stays bright, the others dim), **Space** selects the next overlay,
   the **mouse** moves it left, right, up and down, and the **wheel** or a **right-button drag** moves it nearer or farther.
