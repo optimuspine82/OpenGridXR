@@ -25,6 +25,7 @@ This is **optimuspine82/OpenGridXR**, a fork of DSuzuki35/OpenGridXR (upstream a
 - On Linux a few tests always fail or are cancelled (Windows-only paths). Compare against that baseline instead of expecting all green.
 - Native code is Windows C++17 (MSVC in CI). Sanity-compile new helpers with `x86_64-w64-mingw32-g++-posix -std=c++17 -Wall ... -luser32`; it can't be run here (no Wine).
 - Add each new native self-test to the `ctest -R` list in build.yml.
+- **Before pushing any change under `native/`, or to JavaScript that spawns or talks to a native helper, run the `win32-reviewer` agent (`.claude/agents/win32-reviewer.md`) on it and fix what it finds.** It's the only check for Windows-only problems before Jason tests on the rig.
 
 ## Things we learned the hard way
 - Edit mode input (`native/src/edit_input.cpp`):
